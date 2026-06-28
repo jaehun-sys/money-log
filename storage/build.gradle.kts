@@ -18,14 +18,23 @@ dependencies {
     // [Spring Boot & JPA] DB와 소통하기 위한 기술들
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
+    // 💥 [추가] 스프링이 코틀린 클래스를 해부할 수 있도록 리플렉션 무기 장착!
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+
     // [Database Driver] 일단 가볍게 메모리 DB(H2)로 시작해서 나중에 DB로 갈아끼운다
     runtimeOnly("com.h2database:h2")
 
     // 테스트 도구
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 // 💡 Storage 모듈은 혼자 톰캣 띄우고 실행되는 놈(Application)이 아니라 '부품'이다.
 // 따라서 실행 가능한 BootJar를 만들지 말고, 일반 순수 Jar로 빌드하라고 명시해야 한다. (멀티모듈 필수 설정)
 tasks.bootJar { enabled = false }
 tasks.jar { enabled = true }
+
+// 💥 [추가] 그레이들한테 Junit 5(Platform) 플랫폼을 사용해서 테스트를 찾으라고 강제 지시!
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
