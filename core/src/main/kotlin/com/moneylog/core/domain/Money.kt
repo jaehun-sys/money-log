@@ -62,5 +62,10 @@ data class Money private constructor(
             // Double을 String으로 변환 후 BigDecimal로 만들어 소수점 깨짐을 원천 차단
             return Money(BigDecimal(amount.toString()), currency)
         }
+
+        // 💥 [추가] 금융 연산의 근본이자 DB에서 올라온 데이터를 받아줄 팩토리!
+        fun of(amount: BigDecimal, currency: Currency): Money {
+            return Money(amount, currency)
+        }
     }
 }
