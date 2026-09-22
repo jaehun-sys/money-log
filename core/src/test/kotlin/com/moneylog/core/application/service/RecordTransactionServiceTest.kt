@@ -10,6 +10,7 @@ import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 import java.time.LocalDateTime
 
 class RecordTransactionServiceTest {
@@ -25,7 +26,7 @@ class RecordTransactionServiceTest {
         // [Given] 테스트 환경 세팅
         val command = RecordTransactionCommand(
             type = TransactionType.WITHDRAWAL,
-            amount = 4500.0,
+            amount = BigDecimal(4500.0),
             currencyCode = "KRW",
             category = "식비",
             memo = "스타벅스 아메리카노",
@@ -65,7 +66,7 @@ class RecordTransactionServiceTest {
         assertThatThrownBy {
             RecordTransactionCommand(
                 type = TransactionType.WITHDRAWAL,
-                amount = 0.0, // ❌ 쓰레기 데이터 투입
+                amount = BigDecimal(0.0), // ❌ 쓰레기 데이터 투입
                 currencyCode = "KRW",
                 category = "식비",
                 memo = "공짜 커피",
