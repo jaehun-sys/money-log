@@ -1,6 +1,8 @@
 package com.moneylog.api.adapter.inbound.web
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.moneylog.core.application.port.inbound.LoadTransactionsQuery
+import com.moneylog.core.application.port.inbound.LoadTransactionsUseCase
 import com.moneylog.core.application.port.inbound.RecordTransactionUseCase
 import com.moneylog.core.domain.Transaction
 import com.moneylog.core.domain.TransactionType
@@ -13,19 +15,22 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
+import org.springframework.test.web.servlet.get
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 @WebMvcTest(TransactionController::class)
-class RecordTransactionControllerTest {
+class TransactionControllerTest {
     //스프링 프레임워크 환경에서는 객체를 new로 직접 만들지 않고, 스프링이 나중에 런타임에 꽂아주는(Injection) 경우가 많다. 이때 사용하는 것이 lateinit var다.
     @Autowired private lateinit var mockMvc: MockMvc
     @Autowired private lateinit var objectMapper: ObjectMapper
     @MockkBean private lateinit var recordTransactionUseCase: RecordTransactionUseCase
+    @MockkBean private lateinit var loadTransactionsUseCase: LoadTransactionsUseCase
 
     @Test
-    fun `정상적인 거래 등록 요청은 200을 반환하고 timestamp를 서버 시간으로 주입한다`() {
+    fun `정상적인 거래 등록 요청은 200을 반환하고 occurredAt을 그대로 전달한다`() {
         // given
-        val beforeRequest = LocalDateTime.now()
+        val occurredAt = LocalDateTime.of(2026, 9, 23, 20, 30, 0)
 
         val transaction = io.mockk.mockk<Transaction> {
             every { id } returns "TX-TEST-001"
@@ -36,7 +41,7 @@ class RecordTransactionControllerTest {
         } returns transaction
 
         val request = validRequest().apply {
-            remove("timestamp")
+            this["occurredAt"] = occurredAt.toString()
         }
 
         // when
@@ -44,8 +49,6 @@ class RecordTransactionControllerTest {
             contentType = MediaType.APPLICATION_JSON
             content = objectMapper.writeValueAsString(request)
         }
-
-        val afterRequest = LocalDateTime.now()
 
         // then
         result.andExpect {
@@ -64,17 +67,16 @@ class RecordTransactionControllerTest {
                             it.category == "식비" &&
                             it.memo == "테스트" &&
                             it.userId == "USR-123" &&
-                            it.timestamp >= beforeRequest &&
-                            it.timestamp <= afterRequest
+                            it.occurredAt == occurredAt
                 }
             )
         }
     }
 
     @Test
-    fun `timestamp가 명시되면 해당 값을 그대로 Command에 전달한다`() {
+    fun `occurredAt이 명시되면 해당 값을 그대로 Command에 전달한다`() {
         // given
-        val timestamp = LocalDateTime.of(
+        val occurredAt = LocalDateTime.of(
             2026,
             9,
             20,
@@ -92,7 +94,7 @@ class RecordTransactionControllerTest {
         } returns transaction
 
         val request = validRequest().apply {
-            this["timestamp"] = timestamp.toString()
+            this["occurredAt"] = occurredAt.toString()
         }
 
         // when
@@ -112,7 +114,7 @@ class RecordTransactionControllerTest {
         verify(exactly = 1) {
             recordTransactionUseCase.record(
                 match {
-                    it.timestamp == timestamp
+                    it.occurredAt == occurredAt
                 }
             )
         }
@@ -309,6 +311,70 @@ class RecordTransactionControllerTest {
         }
     }
 
+    @Test
+    fun `정상적인 기간별 거래 내역 조회 요청은 200을 반환한다`() {
+        // given
+        val query = LoadTransactionsQuery(
+            userId = "USR-123",
+            startDate = LocalDate.of(2026, 9, 1),
+            endDate = LocalDate.of(2026, 9, 30)
+        )
+
+        val transaction = io.mockk.mockk<Transaction> {
+            every { id } returns "TX-GET-001"
+            every { userId } returns "USR-123"
+            every { type } returns TransactionType.WITHDRAWAL
+            every { amount } returns io.mockk.mockk {
+                every { amount } returns java.math.BigDecimal("4500")
+                every { currency } returns java.util.Currency.getInstance("KRW")
+            }
+            every { category } returns "식비"
+            every { memo } returns "점심"
+            every { occurredAt } returns LocalDateTime.of(2026, 9, 20, 12, 30, 0)
+        }
+
+        every {
+            loadTransactionsUseCase.load(query)
+        } returns listOf(transaction)
+
+        // when & then
+        mockMvc.get("/api/v1/transactions") {
+            param("userId", "USR-123")
+            param("startDate", "2026-09-01")
+            param("endDate", "2026-09-30")
+        }.andExpect {
+            status { isOk() }
+            // JSON 응답 배열의 첫 번째 요소 검증
+            jsonPath("$[0].id") { value("TX-GET-001") }
+            jsonPath("$[0].userId") { value("USR-123") }
+            jsonPath("$[0].amount") { value(4500) }
+            jsonPath("$[0].category") { value("식비") }
+            jsonPath("$[0].occurredAt") { value("2026-09-20T12:30:00") }
+        }
+
+        // Controller가 HTTP 파라미터를 도메인 Query로 정확히 번역했는지 검증
+        verify(exactly = 1) {
+            loadTransactionsUseCase.load(
+                match {
+                    it.userId == "USR-123" &&
+                            it.startDate == LocalDate.of(2026, 9, 1) &&
+                            it.endDate == LocalDate.of(2026, 9, 30)
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `조회 시 시작일이 종료일보다 늦으면 400을 반환한다`() {
+        mockMvc.get("/api/v1/transactions") {
+            param("userId", "USR-123")
+            param("startDate", "2026-09-30") // 9월 30일 시작
+            param("endDate", "2026-09-01")   // 9월 1일 종료 (에러 발생 조건)
+        }.andExpect {
+            status { isBadRequest() }
+        }
+    }
+
     private fun validRequest(): MutableMap<String, Any?> =
         mutableMapOf(
             "type" to "WITHDRAWAL",
@@ -316,7 +382,8 @@ class RecordTransactionControllerTest {
             "currency" to "KRW",
             "category" to "식비",
             "memo" to "테스트",
-            "userId" to "USR-123"
+            "userId" to "USR-123",
+            "occurredAt" to "2026-09-23T12:00:00"
         )
 
     private fun post(

@@ -36,5 +36,11 @@ class TransactionJpaEntity (
     val createdBy: String,
 
     @Column(nullable = false, length = 50)
-    val createdPgmId: String
+    val createdPgmId: String,
+
+    @Column(name = "user_id", nullable = false, length = 50)
+    val userId: String,
+
+    @Column(name = "occurred_at", nullable = false)
+    val occurredAt: LocalDateTime,
 )

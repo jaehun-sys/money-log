@@ -23,10 +23,10 @@ interface RecordTransactionUseCase {
 /**
  * [Command 객체] 유스케이스 실행 명세서 (Self-Validating Command)
  *
- * - 책임: HTTP/JSON 등 외부 전송 프로토콜과 완전히 분리된 순수 애플리케이션 입력 모델.
- * - 검증 범위: 단순 JSON 파싱/문법(Syntax) 검증이 아니며, 유스케이스를 실행하기 위해
- *             반드시 충족해야 하는 '애플리케이션 입력 불변조건(Application Input Invariant)'을 강제한다.
- * - 불변성: 생성 시점에 모든 필드가 확정되며 이후 변경할 수 없다.
+ * HTTP/JSON 등의 외부 프로토콜과 분리된 순수 애플리케이션 입력 모델이다.
+ *
+ * 모든 필드는 생성 시점에 확정되며,
+ * 유스케이스 실행에 필요한 입력 불변조건을 스스로 검증한다.
  */
 data class RecordTransactionCommand(
     val type: TransactionType,
@@ -34,15 +34,29 @@ data class RecordTransactionCommand(
     val currencyCode: String,
     val category: String,
     val memo: String,
-    val timestamp: LocalDateTime,
+    val occurredAt: LocalDateTime,
     val userId: String,
 ) {
     init {
         // [입력 불변조건 검증] 유스케이스 실행 전 결함이 있는 데이터는 생성 단계에서 즉시 차단한다.
-        require(amount > BigDecimal.ZERO) { "결제 금액은 0보다 커야 합니다. 입력값: $amount" }
-        require(currencyCode.isNotBlank()) { "통화 코드는 필수입니다." }
-        require(category.isNotBlank()) { "카테고리는 필수입니다." }
-        require(userId.isNotBlank()) { "사용자 식별자는 필수입니다." }
-        require(memo.length <= 255) { "메모는 255자를 초과할 수 없습니다. 현재 길이: ${memo.length}" }
+        require(amount > BigDecimal.ZERO) {
+            "결제 금액은 0보다 커야 합니다. 입력값: $amount"
+        }
+
+        require(currencyCode.isNotBlank()) {
+            "통화 코드는 필수입니다."
+        }
+
+        require(category.isNotBlank()) {
+            "카테고리는 필수입니다."
+        }
+
+        require(userId.isNotBlank()) {
+            "사용자 식별자는 필수입니다."
+        }
+
+        require(memo.length <= 255) {
+            "메모는 255자를 초과할 수 없습니다. 현재 길이: ${memo.length}"
+        }
     }
 }

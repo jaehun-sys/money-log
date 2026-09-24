@@ -12,6 +12,9 @@ import java.time.LocalDateTime
  *
  * - 책임: HTTP JSON 역직렬화 및 외부 입력의 구문/형식적 유효성(HTTP/Web Validation) 검증.
  * - 코틀린 Reflection 및 Bean Validation 정상 동작을 위해 필수 필드는 Nullable(`?`)로 선언하고 어노테이션으로 제어한다.
+ *
+ * HTTP 요청의 입력값을 검증하고,
+ * 이후 Core의 Command로 변환된다.
  */
 data class RecordTransactionRequest(
     @field:NotNull(message = "거래 유형은 필수입니다.")
@@ -29,7 +32,8 @@ data class RecordTransactionRequest(
 
     val memo: String = "",
 
-    val timestamp: LocalDateTime? = null,
+    @field:NotNull(message = "거래 발생 시각은 필수입니다.")
+    val occurredAt: LocalDateTime?,
 
     @field:NotBlank(message = "사용자 식별자는 필수입니다.")
     val userId: String?
