@@ -21,3 +21,52 @@
 * **JDK:** Eclipse Temurin Java 21 (LTS)
 * **Build Tool:** Gradle Wrapper (Kotlin DSL)
 * **Architecture:** Hexagonal (Ports and Adapters) / Domain-Driven Design
+
+---
+
+## Current Application Flow
+
+### 거래 등록
+
+```text
+POST /api/v1/transactions
+        ↓
+TransactionController
+        ↓
+RecordTransactionUseCase
+        ↓
+RecordTransactionService
+        ↓
+SaveTransactionPort
+        ↓
+TransactionPersistenceAdapter
+        ↓
+TransactionJpaRepository
+```
+
+### 거래 기간 조회
+
+```text
+GET /api/v1/transactions
+        ↓
+TransactionController
+        ↓
+LoadTransactionsUseCase
+        ↓
+LoadTransactionsService
+        ↓
+LoadTransactionsPort
+        ↓
+TransactionPersistenceAdapter
+        ↓
+TransactionJpaRepository
+```
+
+### Transaction 시간 정책
+
+Transaction은 거래 발생 시각과 시스템 데이터 생성 시각을 구분한다.
+
+* `occurredAt`: 실제 거래가 발생한 시간
+* `createdAt`: 시스템에서 데이터가 생성된 시간
+
+`occurredAt`은 Core Domain의 비즈니스 데이터이며, `createdAt`을 포함한 Audit 정보는 Persistence 계층에서 관리한다.

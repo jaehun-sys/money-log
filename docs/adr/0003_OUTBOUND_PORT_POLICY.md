@@ -17,3 +17,59 @@
 ## 4. 영속화 상태 보장 (Return Type)
 - **void/Unit 사용 지양:** 데이터를 저장하는 행위(`save`)는 반환 타입을 생략하지 않고, 반드시 영속화가 완료된 도메인 객체(`Transaction`)를 다시 반환하도록 계약(Contract)을 맺습니다.
 - 이를 통해 유즈케이스 호출자에게 저장 성공 여부와 최종 상태를 명확히 보장하며, 불변성을 해치지 않는 체이닝 구현을 가능하게 합니다.
+
+## 5. 조회용 Outbound Port
+
+Outbound Port는 저장뿐만 아니라 Core가 외부 데이터 저장소에서 필요한 데이터를 조회하기 위한 계약도 정의한다.
+
+거래 조회 기능에서는 다음 Port를 사용한다.
+
+```kotlin
+interface LoadTransactionsPort {
+    fun load(query: LoadTransactionsQuery): List<Transaction>
+}
+````
+
+Core는 JPA Repository나 SQL Query를 직접 참조하지 않는다.
+
+구조는 다음과 같다.
+
+```text
+LoadTransactionsService
+        ↓
+LoadTransactionsPort
+        ↓
+TransactionPersistenceAdapter
+        ↓
+TransactionJpaRepository
+        ↓
+Database
+```
+
+### Query 객체의 소유권
+
+조회 조건을 표현하는 `LoadTransactionsQuery`는 Core Application 계층에서 정의한다.
+
+따라서 Persistence Adapter가 사용하는 JPA Specification, QueryDSL, JPQL 등의 기술적인 조회 방식은 Core에 노출하지 않는다.
+
+Core가 요구하는 것은 다음과 같은 비즈니스 조회 조건이다.
+
+```text
+userId
+startDate
+endDate
+```
+
+실제 DB 조회 조건으로 변환하는 책임은 Persistence Adapter가 가진다.
+
+### Policy
+
+새로운 외부 데이터 조회가 필요한 경우:
+
+1. Core Application에서 UseCase를 정의한다.
+2. 필요한 조회 조건을 Query 모델로 정의한다.
+3. Core에 Outbound Port를 정의한다.
+4. Persistence Adapter에서 Port를 구현한다.
+5. 실제 DB 조회 기술은 Adapter 내부에서 결정한다.
+
+이를 통해 Core가 특정 Persistence 기술에 종속되지 않도록 한다.
