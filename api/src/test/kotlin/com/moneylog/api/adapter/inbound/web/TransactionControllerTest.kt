@@ -14,10 +14,8 @@ import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.post
 import java.time.LocalDateTime
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
-@WebMvcTest(RecordTransactionController::class)
+@WebMvcTest(TransactionController::class)
 class RecordTransactionControllerTest {
     //스프링 프레임워크 환경에서는 객체를 new로 직접 만들지 않고, 스프링이 나중에 런타임에 꽂아주는(Injection) 경우가 많다. 이때 사용하는 것이 lateinit var다.
     @Autowired private lateinit var mockMvc: MockMvc
