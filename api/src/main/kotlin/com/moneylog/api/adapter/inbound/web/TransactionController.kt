@@ -64,6 +64,7 @@ class TransactionController(
         @RequestParam startDate: LocalDate,
         @RequestParam endDate: LocalDate,
     ): ResponseEntity<List<TransactionResponse>> {
+        // Controller는 복잡한 시간 계산 없이 순수하게 값만 전달한다.(LocalDate:2026-09-01)
 
         val query = LoadTransactionsQuery(
             userId = userId,

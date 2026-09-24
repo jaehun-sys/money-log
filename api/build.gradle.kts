@@ -8,6 +8,7 @@ plugins {
 dependencies {
     // 🏛️ 헥사고날 의존성: Inbound Web Adapter는 Core(UseCase, Command)에 의존한다.
     implementation(project(":core"))
+    implementation(project(":storage"))
 
     // 🌐 Web & Validation
     implementation("org.springframework.boot:spring-boot-starter-web")
