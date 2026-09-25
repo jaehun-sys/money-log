@@ -1,21 +1,70 @@
-# 💰 money-log (금융 비즈니스 코어 엔진)
+# 💰 money-log
 
-> **"금융 데이터를 정확하게 기록하고 분석하기 위한 도메인 중심의 개인 금융 관리 시스템"**
+> **금융 데이터를 정확하게 기록하고, 이를 기반으로 금융 연산과 분석을 확장하기 위한 개인 금융 관리 시스템**
 
-본 프로젝트는 단순한 가계부를 넘어 금융 데이터를 정규화하고,
-거래·자산 데이터를 기반으로 금융 연산 및 분석을 수행하기 위한
-DDD + Hexagonal Architecture 기반의 멀티 모듈 프로젝트입니다.
+money-log는 금융 데이터를 정규화하고 거래·자산 데이터를 기반으로 금융 연산 및 분석 기능을 구축하기 위한 프로젝트입니다.
+
+DDD + Hexagonal Architecture를 기반으로 Gradle 멀티 모듈 구조를 적용하여 비즈니스 로직과 외부 기술의 의존성 경계를 분리합니다.
 
 ---
 
-## 🏗️ 아키텍처 아키타입 (Multi-Module System)
+## 🏗️ 아키텍처
 
-본 시스템은 Gradle 멀티 모듈을 통해
-비즈니스 로직과 외부 기술의 의존성 경계를 물리적으로 분리합니다.
+money-log는 Gradle 멀티 모듈을 통해 Core의 비즈니스 로직과 외부 기술의 의존성 경계를 물리적으로 분리합니다.
 
-* `:core` - **비즈니스 코어**. 순수 Kotlin으로 구성되며 Spring Boot, JPA 등 외부 프레임워크에 의존하지 않습니다.
-* `:storage` - **영속성 어댑터**. Spring Data JPA를 통해 데이터베이스와 Core를 연결합니다.
-* `:api` - **웹 인바운드 어댑터**. Spring Boot 기반 REST API를 통해 외부 요청을 Core의 Use Case로 전달합니다.
+```text
+                     ┌──────────────────────┐
+                     │       :api           │
+                     │   Web Inbound Adapter │
+                     │   Spring MVC / REST  │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │       :core          │
+                     │  Domain / Application│
+                     │    Pure Kotlin       │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │      :storage        │
+                     │ Persistence Adapter  │
+                     │   JPA / Database     │
+                     └──────────────────────┘
+```
+
+### `:core`
+
+**비즈니스 코어**
+
+* Domain Model
+* Application Service
+* Inbound / Outbound Port
+* Command / Query
+* 순수 Kotlin 기반 구성
+* Spring Boot, JPA 등 외부 프레임워크에 직접 의존하지 않음
+
+### `:storage`
+
+**영속성 어댑터**
+
+* Spring Data JPA
+* Persistence Adapter
+* Repository
+* Entity Mapping
+* 데이터베이스 접근
+* Persistence Audit 정보 관리
+
+### `:api`
+
+**웹 인바운드 어댑터**
+
+* Spring Boot / Spring MVC
+* REST API
+* Request / Response DTO
+* API Validation
+* Core Application Service의 Spring Bean 조립
 
 ---
 
@@ -33,8 +82,7 @@ DDD + Hexagonal Architecture 기반의 멀티 모듈 프로젝트입니다.
 
 ## 🔄 Current Application Flow
 
-> 외부 요청은 Inbound Port를 통해 Core로 진입하고,
-> 데이터 접근은 Outbound Port를 통해 Persistence Adapter로 위임됩니다.
+외부 요청은 Inbound Port를 통해 Core로 진입하고, 데이터 접근은 Outbound Port를 통해 Persistence Adapter로 위임됩니다.
 
 ### 거래 등록
 
@@ -74,17 +122,26 @@ TransactionJpaRepository
 
 ---
 
-## 📌 Core Domain Policy
+## 📌 Core Domain
 
-### Transaction 시간 정책
+현재 Core Domain에서는 거래 데이터를 다음과 같이 모델링합니다.
 
-Transaction은 거래 발생 시각과 시스템 데이터 생성 시각을 구분한다.
+```text
+Transaction
+├── id
+├── userId
+├── type
+├── amount
+├── category
+├── memo
+└── occurredAt
+```
 
-* `occurredAt`: 실제 거래가 발생한 시간
-* `createdAt`: 시스템에서 데이터가 생성된 시간
+`occurredAt`은 실제 거래가 발생한 시각을 의미하는 비즈니스 데이터입니다.
 
-`occurredAt`은 Core Domain의 비즈니스 데이터이며,
-`createdAt`을 포함한 Audit 정보는 Persistence 계층에서 관리한다.
+시스템에서 데이터가 생성된 시점인 `createdAt`과 같은 Audit 정보는 Persistence 계층에서 관리합니다.
+
+세부적인 도메인 및 설계 원칙은 [`docs/PRODUCT.md`](docs/PRODUCT.md)에서 관리합니다.
 
 ---
 
@@ -95,7 +152,7 @@ Transaction은 거래 발생 시각과 시스템 데이터 생성 시각을 구�
 ```bash
 git clone https://github.com/jaehun-sys/money-log.git
 cd money-log
-````
+```
 
 ### 2. Test
 
@@ -109,28 +166,34 @@ cd money-log
 ./gradlew :api:bootRun
 ```
 
-API 서버 실행 후:
+API 서버 실행 후 현재 구현된 거래 API를 확인할 수 있습니다.
 
 ```text
-GET /api/v1/transactions
+GET  /api/v1/transactions
 POST /api/v1/transactions
 ```
-
-를 통해 현재 구현된 거래 API를 확인할 수 있습니다.
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] Core Domain / Money / Transaction
-- [x] Hexagonal Architecture 기반 Application Layer
-- [x] JPA Persistence Adapter
-- [x] 거래 등록 API
-- [x] 기간별 거래 조회 API
-- [ ] 거래 수정 / 삭제
-- [ ] 인증 및 사용자 컨텍스트 연계
-- [ ] 금융 데이터 정규화
-- [ ] 자산 및 금융 분석 기능
+### Current
+
+* [x] Core Domain / Money / Transaction
+* [x] Hexagonal Architecture 기반 Application Layer
+* [x] JPA Persistence Adapter
+* [x] 거래 저장 / 조회
+* [x] 거래 등록 API
+* [x] 기간별 거래 조회 API
+* [x] Web Adapter Test
+* [x] API Integration Test
+
+### Next
+
+* [ ] 거래 수정 / 삭제
+* [ ] 인증 및 사용자 컨텍스트 연계
+* [ ] 금융 데이터 정규화
+* [ ] 자산 및 금융 분석 기능
 
 상세한 개발 방향과 설계 원칙은 [`docs/PRODUCT.md`](docs/PRODUCT.md)를 참고하세요.
 
@@ -138,10 +201,10 @@ POST /api/v1/transactions
 
 ## 📚 Documentation
 
-money-log의 상세한 개발 철학과 설계 원칙은 별도 문서로 관리합니다.
+money-log의 프로젝트 방향과 설계 관련 내용은 목적에 따라 별도 문서로 관리합니다.
 
-- **[PRODUCT.md](docs/PRODUCT.md)**  
-  프로젝트의 목적, 도메인 모델링 원칙, 아키텍처 방향, 개발 방법론 및 로드맵
+* **[PRODUCT.md](docs/PRODUCT.md)**
+  프로젝트의 목적, 제품 방향, 도메인 모델링 원칙, 아키텍처 원칙, 개발 방법론 및 로드맵
 
-- **[Architecture Decision Records](docs/adr/)**  
+* **[Architecture Decision Records](docs/adr/)**
   주요 아키텍처 및 도메인 설계 결정과 그 배경
