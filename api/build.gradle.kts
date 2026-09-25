@@ -20,6 +20,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("com.ninja-squad:springmockk:4.0.2") // Spring 컨텍스트에서 @MockkBean을 사용하기 위한 라이브러리
+    testImplementation("org.springframework:spring-tx") // API 모듈의 프로덕션 환경은 트랜잭션을 몰라도 되지만, 테스트 환경은 트랜잭션을 알아야 한다.
 
     // 런타임 테스트 엔진
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
