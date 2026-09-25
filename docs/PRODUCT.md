@@ -303,6 +303,8 @@ money-log
 * Spring Framework 의존성
 * HTTP 처리
 
+Application Service 역시 Spring Bean annotation에 의존하지 않는 순수 Kotlin으로 유지합니다. 외부 프레임워크와의 객체 조립은 Composition Root에서 담당합니다.
+
 #### `:storage`
 
 담당:
@@ -312,6 +314,7 @@ money-log
 * Repository
 * Entity Mapping
 * 데이터베이스 접근
+* Persistence Audit 정보 관리
 
 #### `:api`
 
@@ -321,6 +324,7 @@ money-log
 * Controller
 * Request/Response 변환
 * Inbound UseCase 호출
+* Core Application Service의 Spring Bean 조립
 
 비즈니스 규칙은 Controller에 넣지 않습니다.
 
@@ -385,6 +389,26 @@ Database
 거래 기간 조회는 `userId`, `startDate`, `endDate`를 조건으로 사용합니다.
 
 조회 기간은 `startDate <= endDate` 조건을 만족해야 합니다.
+
+API는 사용자의 조회 의도를 날짜 단위로 표현하기 위해 `LocalDate`를 사용합니다.
+
+Core Domain의 `Transaction.occurredAt`은 실제 거래 발생 시각을 표현하므로 `LocalDateTime`을 사용합니다.
+
+Persistence 계층에서는 날짜 단위 조회 조건을 DB의 시간 범위로 변환합니다.
+
+```text
+startDate = 2026-09-01
+endDate   = 2026-09-30
+
+start = 2026-09-01T00:00:00
+end   = 2026-10-01T00:00:00
+
+occurredAt >= start
+AND
+occurredAt < end
+```
+
+종료일의 다음 날 00시를 배타적 상한으로 사용하는 Half-Open Interval 방식으로 날짜 경계를 처리합니다.
 
 ### Command와 Query
 
@@ -454,11 +478,32 @@ Persistence
 
 TransactionJpaEntity
 ├── business data
-├── occurredAt
-├── createdAt
-├── createdBy
-└── createdPgmId
+│   ├── id
+│   ├── userId
+│   ├── type
+│   ├── amount
+│   ├── category
+│   ├── memo
+│   └── occurredAt
+│
+└── audit data
+    ├── createdAt
+    ├── createdBy
+    └── createdPgmId
 ```
+
+`occurredAt`은 실제 거래가 발생한 시각을 의미하는 **Core Domain의 비즈니스 데이터**입니다.
+
+Persistence 계층에서는 이 값을 `TransactionJpaEntity.occurredAt`으로 저장하지만, 이는 Domain의 비즈니스 데이터를 영속화하기 위한 필드이며 Audit 정보에 해당하지 않습니다.
+
+반면 `createdAt`, `createdBy`, `createdPgmId`는 시스템에서 해당 데이터를 생성한 시점과 행위자, 프로그램을 기록하는 **Persistence Audit 정보**입니다.
+
+따라서 `occurredAt`과 `createdAt`은 서로 다른 의미를 가지며 동일한 시간 정보로 취급하지 않습니다.
+
+* `occurredAt`: 실제 거래가 발생한 시간
+* `createdAt`: 시스템에서 거래 데이터가 생성된 시간
+* `createdBy`: 시스템에서 거래 데이터를 생성한 행위자
+* `createdPgmId`: 거래 데이터를 생성한 프로그램
 
 `userId`는 거래의 비즈니스 소유자를 의미하고, `createdBy`는 시스템에서 데이터를 생성한 행위자를 의미합니다.
 
@@ -553,12 +598,16 @@ Application Service Test
     ↓
 Persistence Slice Test
     ↓
+Web Adapter Test
+    ↓
 Integration Test
     ↓
 Performance Test
 ```
 
 ## 테스트 전략
+
+테스트는 하나의 테스트에 모든 책임을 몰아넣지 않고, 실패 원인을 식별할 수 있도록 계층별 책임을 분리합니다.
 
 ### Domain Test
 
@@ -593,19 +642,45 @@ SaveTransactionPort 호출
 
 ### Persistence Slice Test
 
-JPA와 데이터베이스 매핑을 검증합니다.
+JPA와 데이터베이스 매핑 및 Persistence Adapter의 DB 접근을 검증합니다.
 
 현재 기록된 구현에서는 H2와 `@DataJpaTest` 기반 검증을 사용합니다.
 
+거래 조회에서는 `userId`와 날짜 범위 조건이 실제 DB 조회로 올바르게 변환되는지 검증합니다.
+
 ### Web Adapter Test
 
-Spring MVC 기반 Web Adapter의 요청 검증과 UseCase 호출을 검증합니다.
+Spring MVC 기반 Web Adapter의 HTTP 요청/응답, Validation, Binding, UseCase 호출을 검증합니다.
 
-현재 `TransactionControllerTest`에서 거래 등록과 거래 기간 조회 API를 검증합니다.
+`TransactionControllerTest`에서는 UseCase를 Mock으로 대체하여 Controller 자체의 책임을 검증합니다.
 
 ### Integration Test
 
-Web Adapter, Application Service, Persistence Adapter가 함께 동작하는 전체 통합 테스트는 향후 확장합니다.
+실제 Spring Context에서 Web Adapter, Core Application Service, Persistence Adapter, JPA, H2가 함께 동작하는 흐름을 검증합니다.
+
+현재 `TransactionControllerIntegrationTest`에서 거래 조회 API를 실제 계층을 통해 검증합니다.
+
+```text
+MockMvc
+   ↓
+TransactionController
+   ↓
+LoadTransactionsUseCase
+   ↓
+LoadTransactionsService
+   ↓
+LoadTransactionsPort
+   ↓
+TransactionPersistenceAdapter
+   ↓
+JPA Repository
+   ↓
+H2
+```
+
+통합 테스트에서는 실제 UseCase와 Persistence 계층을 사용하며 Mock을 사용하지 않습니다.
+
+각 테스트는 `@Transactional`을 통해 테스트 종료 후 트랜잭션을 rollback하여 테스트 데이터를 격리합니다.
 
 ### 테스트 실행
 
@@ -713,8 +788,12 @@ Persistence Adapter
 Web Adapter
     │
     ▼
+[완료]
+Integration Test
+    │
+    ▼
 [다음 단계]
-Integration
+Financial Analytics
     │
     ▼
 Performance
@@ -730,23 +809,26 @@ Open Source Release
 
 * **:core의 순수 Kotlin Domain/Application 구조**
 
-    * Money Value Object
-    * Transaction Domain
-    * Inbound / Outbound Port
-    * Application Service
-    * Command / Query 모델
+  * Money Value Object
+  * Transaction Domain
+  * Inbound / Outbound Port
+  * Application Service
+  * Command / Query 모델
 * **:storage Persistence Adapter**
 
-    * JPA 기반 영속성 구조
-    * H2 기반 Persistence Slice Test
-    * Persistence 경계에서 Audit 정보 관리
+  * JPA 기반 영속성 구조
+  * 거래 저장 및 조회
+  * H2 기반 Persistence Slice Test
+  * Persistence 경계에서 Audit 정보 관리
+  * 날짜 단위 조회 조건을 Half-Open Interval 시간 범위로 변환
 * **:api Web Adapter**
 
-    * Spring MVC 기반 REST API
-    * 거래 등록 API
-    * 거래 기간 조회 API
-    * API Validation (Bean Validation)
-    * WebMvcTest 기반 Controller 테스트
+  * Spring MVC 기반 REST API
+  * 거래 등록 API
+  * 거래 기간 조회 API
+  * API Validation (Bean Validation)
+  * WebMvcTest 기반 Controller 테스트
+  * 실제 Spring Context 기반 Integration Test
 
 ### 로드맵
 
@@ -781,7 +863,7 @@ Open Source Release
 * [x] JPA Mapping
 * [x] Persistence Slice Test
 * [x] 거래 조회용 Persistence Port 정의
-* [ ] 거래 조회 DB 구현
+* [x] 거래 조회 DB 구현
 * [ ] PostgreSQL 기반 실제 환경 검증
 
 #### Phase 4 — Web/API
@@ -792,6 +874,8 @@ Open Source Release
 * [x] 거래 등록 API
 * [x] 거래 기간 조회 API
 * [x] Controller Test
+* [x] API Integration Test
+* [x] 테스트 트랜잭션을 통한 데이터 격리
 
 #### Phase 5 — Financial Analytics
 
@@ -890,6 +974,8 @@ Pull Request 생성
 
 `:core`는 Spring, JPA, 데이터베이스 기술에 직접 의존하지 않습니다.
 
+Application Service 역시 Spring Bean annotation에 의존하지 않습니다. Core Application Service의 객체 조립은 외부 Composition Root에서 담당합니다.
+
 ### 데이터베이스보다 도메인을 먼저 설계합니다
 
 스키마보다 Domain Model과 Business Rule을 먼저 정의합니다.
@@ -921,11 +1007,38 @@ Application Service가 모든 비즈니스 규칙을 독점하지 않도록 합�
 
 거래의 실제 발생 시각인 `occurredAt`과 시스템 데이터 생성 시각인 `createdAt`을 구분합니다.
 
-`occurredAt`은 Core Domain의 비즈니스 데이터로 관리하고, Audit 정보는 Persistence 계층에서 관리합니다.
+`occurredAt`은 Core Domain의 비즈니스 데이터로 관리하고, Persistence 계층에서는 이를 영속화합니다.
+
+`createdAt`, `createdBy`, `createdPgmId`는 Persistence Audit 정보로 관리합니다.
+
+### API 입력 모델과 Core 입력 모델을 분리합니다
+
+외부 HTTP 프로토콜에 사용되는 Request/Response DTO와 Core Application의 Command/Query를 분리합니다.
+
+외부 API의 표현 방식이 변경되더라도 Core Application 모델이 직접 영향을 받지 않도록 합니다.
 
 ### 테스트 책임을 분리합니다
 
-Domain, Application, Persistence의 실패 원인을 서로 독립적으로 확인합니다.
+각 테스트는 서로 다른 책임과 실패 원인을 검증합니다.
+
+```text
+Domain Test
+→ Domain 규칙
+
+Application Service Test
+→ Application 흐름
+
+Persistence Slice Test
+→ JPA / Repository / DB 접근
+
+Web Adapter Test
+→ HTTP / Validation / Binding / Controller
+
+Integration Test
+→ 실제 계층 간 Wiring 및 전체 API 흐름
+```
+
+Integration Test에서는 실제 계층을 연결하여 검증하되, 테스트 데이터는 테스트 트랜잭션 rollback을 통해 격리합니다.
 
 ### 정확성을 성능보다 먼저 증명합니다
 
