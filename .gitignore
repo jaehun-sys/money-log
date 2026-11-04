@@ -64,3 +64,8 @@ bin/
 /dataSources/
 /dataSources.local.xml
 .aider*
+
+
+# AI Agent Workspace
+MEMORY.md
+.agy/
