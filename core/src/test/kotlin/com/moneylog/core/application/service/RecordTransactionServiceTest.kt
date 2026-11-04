@@ -30,7 +30,7 @@ class RecordTransactionServiceTest {
             currencyCode = "KRW",
             category = "식비",
             memo = "스타벅스 아메리카노",
-            timestamp = LocalDateTime.now(),
+            occurredAt = LocalDateTime.now(),
             userId = "USR-123"
         )
 
@@ -70,12 +70,12 @@ class RecordTransactionServiceTest {
                 currencyCode = "KRW",
                 category = "식비",
                 memo = "공짜 커피",
-                timestamp = LocalDateTime.now(),
+                occurredAt = LocalDateTime.now(),
                 userId = "USR-123"
             )
         }
             // IllegalArgumentException이 발생해야 하며, 에러 메시지를 포함해야 한다.
             .isInstanceOf(IllegalArgumentException::class.java)
-            .hasMessageContaining("결제 금액은 0보다 커야 한다")
+            .hasMessageContaining("결제 금액은 0보다 커야 합니다")
     }
 }
