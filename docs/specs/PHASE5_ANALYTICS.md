@@ -5,7 +5,7 @@
 **작성일:** 2026-09-29
 **상태:** Confirmed Specification / Technical Decisions Pending
 **대상 Phase:** Phase 5 — Financial Analytics
-**문서 경로:** `docs/PHASE5_ANALYTICS_SPEC.md`
+**문서 경로:** `docs/specs/PHASE5_ANALYTICS.md`
 
 ## 목차
 

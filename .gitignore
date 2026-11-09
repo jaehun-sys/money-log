@@ -69,3 +69,6 @@ bin/
 # AI Agent Workspace
 MEMORY.md
 .agy/
+.agyrc
+.agyrc.backup
+
